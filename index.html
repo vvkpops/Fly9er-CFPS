@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/weather-icon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Weatheredstrip - Professional Aviation Weather</title>
+    <meta name="description" content="A professional weather data interface for aviation, sourcing data from NAV Canada." />
+    
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background-color: #f9fafb;
+        font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+      }
+      #loading-screen {
+        position: fixed;
+        inset: 0;
+        background: linear-gradient(135deg, #f3f4f6 0%, #e0e7ff 100%);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 100;
+        transition: opacity 0.5s ease-out;
+      }
+      .loading-spinner {
+        width: 50px;
+        height: 50px;
+        border: 4px solid rgba(59, 130, 246, 0.2);
+        border-top-color: #3b82f6;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .loading-text {
+        margin-top: 20px;
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #1f2937;
+      }
+      .loading-subtext {
+        margin-top: 8px;
+        font-size: 0.9rem;
+        color: #4b5563;
+      }
+      body.loaded #loading-screen {
+        opacity: 0;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loading-screen">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Weatheredstrip</div>
+      <div class="loading-subtext">Initializing Weather Data Terminal...</div>
+    </div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+    <script>
+      const rootEl = document.getElementById('root');
+      const observer = new MutationObserver(mutations => {
+        if (rootEl.children.length > 0) {
+          document.body.classList.add('loaded');
+          observer.disconnect();
+        }
+      });
+      observer.observe(rootEl, { childList: true });
+      setTimeout(() => {
+        document.body.classList.add('loaded');
+        observer.disconnect();
+      }, 5000);
+    </script>
+  </body>
+</html>

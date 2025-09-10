@@ -327,6 +327,12 @@ export function parseImageData(data) {
     }
   }
 
+  // Case 6: Handle empty data arrays gracefully
+  if (data.data && Array.isArray(data.data) && data.data.length === 0) {
+    console.log('ℹ️ [ImageParser] Empty data array - no images available');
+    return { images: [], error: null };
+  }
+
   // Fallback: Log the unhandled structure for debugging
   console.warn('⚠️ [ImageParser] Unsupported data structure:', {
     type: typeof data,
@@ -364,23 +370,27 @@ export async function validateImageUrl(imageUrl) {
 }
 
 /**
- * Filters out invalid images and adds fallback URLs
+ * Filters out invalid images and adds fallback URLs - UPDATED to only use corsproxy.io
  */
 export function enhanceImageData(images) {
   return images.map(img => {
     const enhanced = { ...img };
     
-    // Add multiple proxy options for better reliability
+    // Ensure we have a proxy URL using only corsproxy.io
     if (img.url && !img.proxy_url) {
       enhanced.proxy_url = `${CORS_PROXY}${encodeURIComponent(img.url)}`;
     }
     
-    // Add alternative proxy URLs
+    // Add alternative URL formats but still using the same proxy
+    const baseUrl = img.url;
     enhanced.fallback_urls = [
       enhanced.proxy_url,
-      `https://cors-anywhere.herokuapp.com/${img.url}`,
-      `https://api.allorigins.win/raw?url=${encodeURIComponent(img.url)}`
+      // Try different encoding approaches with the same proxy
+      `${CORS_PROXY}${encodeURIComponent(baseUrl).replace(/%2F/g, '/')}`
     ].filter(Boolean);
+    
+    // Add direct URL as final fallback (for debugging/manual access)
+    enhanced.direct_url = baseUrl;
     
     return enhanced;
   });

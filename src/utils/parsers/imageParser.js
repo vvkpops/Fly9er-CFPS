@@ -74,8 +74,66 @@ export function parseImageData(data) {
 
           // Handle different parsedText structures
           if (parsedText) {
+            // Check if parsedText has frame_lists (common GFA/satellite format)
+            if (parsedText.frame_lists && Array.isArray(parsedText.frame_lists)) {
+              console.log('🔍 [ImageParser] Processing frame_lists with', parsedText.frame_lists.length, 'frames');
+              
+              for (const frameList of parsedText.frame_lists) {
+                if (frameList.frames && Array.isArray(frameList.frames)) {
+                  for (const frame of frameList.frames) {
+                    if (frame.images && Array.isArray(frame.images)) {
+                      for (const img of frame.images) {
+                        if (img.id) {
+                          // NAV Canada image format
+                          const imageUrl = `https://plan.navcanada.ca/weather/images/${img.id}.image`;
+                          images.push({
+                            url: imageUrl,
+                            proxy_url: `${CORS_PROXY}${encodeURIComponent(imageUrl)}`,
+                            period: frame.sv || frameList.sv || img.period || '',
+                            content_type: 'image/gif',
+                            product: parsedText.product || '',
+                            frame_info: {
+                              start_validity: frame.sv || frameList.sv,
+                              end_validity: frame.ev || frameList.ev,
+                              created: img.created
+                            },
+                            metadata: {
+                              original: item,
+                              parsedText,
+                              source: 'frame_lists_nav_canada'
+                            }
+                          });
+                          console.log('✅ [ImageParser] Added NAV Canada image:', imageUrl);
+                        }
+                      }
+                    }
+                  }
+                }
+                // Handle direct frame URLs (alternative format)
+                else if (frameList.url || frameList.image_url) {
+                  const imageUrl = frameList.url || frameList.image_url;
+                  images.push({
+                    url: imageUrl,
+                    proxy_url: `${CORS_PROXY}${encodeURIComponent(imageUrl)}`,
+                    period: frameList.period || frameList.sv || '',
+                    content_type: 'image/gif',
+                    product: parsedText.product || '',
+                    frame_info: {
+                      start_validity: frameList.sv,
+                      end_validity: frameList.ev
+                    },
+                    metadata: {
+                      original: item,
+                      parsedText,
+                      source: 'frame_lists_direct_url'
+                    }
+                  });
+                  console.log('✅ [ImageParser] Added direct frame URL:', imageUrl);
+                }
+              }
+            }
             // Check if parsedText has a direct URL
-            if (parsedText.url || parsedText.image_url || parsedText.src) {
+            else if (parsedText.url || parsedText.image_url || parsedText.src) {
               const imageUrl = parsedText.url || parsedText.image_url || parsedText.src;
               images.push({
                 url: imageUrl,
@@ -109,27 +167,6 @@ export function parseImageData(data) {
                     }
                   });
                   console.log('✅ [ImageParser] Added image from array:', imageUrl);
-                }
-              }
-            }
-            // Check if parsedText has frame_lists (GFA format)
-            else if (parsedText.frame_lists && Array.isArray(parsedText.frame_lists)) {
-              for (const frame of parsedText.frame_lists) {
-                if (frame.url || frame.image_url) {
-                  const imageUrl = frame.url || frame.image_url;
-                  images.push({
-                    url: imageUrl,
-                    proxy_url: `${CORS_PROXY}${encodeURIComponent(imageUrl)}`,
-                    period: frame.period || frame.time || '',
-                    content_type: 'image/gif',
-                    product: parsedText.product || '',
-                    metadata: {
-                      original: item,
-                      parsedText,
-                      source: 'parsed_text_frame_lists'
-                    }
-                  });
-                  console.log('✅ [ImageParser] Added image from frame_lists:', imageUrl);
                 }
               }
             }

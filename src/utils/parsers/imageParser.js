@@ -26,14 +26,16 @@ export function parseImageData(data) {
     };
   }
 
-  // Case 2: API returns data array with text field containing JSON
-  if (Array.isArray(data.data) && data.data.length > 0) {
+  // Case 2: API returns data array with text field containing JSON (FIXED)
+  if (data.data && Array.isArray(data.data) && data.data.length > 0) {
     console.log('🔍 [ImageParser] Processing data array with', data.data.length, 'items');
     
     try {
       const images = [];
       
       for (const item of data.data) {
+        console.log('🔍 [ImageParser] Processing data item:', item);
+        
         if (item.text) {
           let parsedText;
           
@@ -41,37 +43,155 @@ export function parseImageData(data) {
           if (typeof item.text === 'string') {
             try {
               parsedText = JSON.parse(item.text);
+              console.log('✅ [ImageParser] Parsed text as JSON:', parsedText);
             } catch (e) {
               console.warn('⚠️ [ImageParser] Failed to parse text field as JSON:', e.message);
+              // Try to treat as raw text with URLs
+              const urlMatches = item.text.match(/https?:\/\/[^\s]+\.(gif|png|jpg|jpeg)/gi);
+              if (urlMatches && urlMatches.length > 0) {
+                for (const url of urlMatches) {
+                  images.push({
+                    url,
+                    proxy_url: `${CORS_PROXY}${encodeURIComponent(url)}`,
+                    period: item.valid_time || item.time || '',
+                    content_type: 'image/' + url.split('.').pop(),
+                    metadata: {
+                      original: item,
+                      source: 'text_url_extraction'
+                    }
+                  });
+                }
+              }
               continue;
             }
           } else if (typeof item.text === 'object') {
             parsedText = item.text;
+            console.log('✅ [ImageParser] Text is already an object:', parsedText);
           } else {
+            console.log('⚠️ [ImageParser] Skipping item with non-string/non-object text');
             continue;
           }
 
-          // Handle both array and single object formats
-          const imageEntries = Array.isArray(parsedText) ? parsedText : [parsedText];
-          
-          for (const img of imageEntries) {
-            if (img && (img.url || img.image_url || img.src)) {
-              const imageUrl = img.url || img.image_url || img.src;
-              const processedImage = {
+          // Handle different parsedText structures
+          if (parsedText) {
+            // Check if parsedText has a direct URL
+            if (parsedText.url || parsedText.image_url || parsedText.src) {
+              const imageUrl = parsedText.url || parsedText.image_url || parsedText.src;
+              images.push({
                 url: imageUrl,
                 proxy_url: `${CORS_PROXY}${encodeURIComponent(imageUrl)}`,
-                period: img.valid_time || img.time || img.period || '',
-                content_type: img.content_type || 'image/gif',
-                product: img.product || '',
+                period: parsedText.valid_time || parsedText.time || parsedText.period || item.valid_time || '',
+                content_type: parsedText.content_type || 'image/gif',
+                product: parsedText.product || '',
                 metadata: {
-                  original: img,
-                  source: 'api_data_array'
+                  original: item,
+                  parsedText,
+                  source: 'parsed_text_direct_url'
                 }
-              };
-              images.push(processedImage);
-              console.log('✅ [ImageParser] Added image:', imageUrl);
+              });
+              console.log('✅ [ImageParser] Added image from direct URL:', imageUrl);
+            }
+            // Check if parsedText is an array of image objects
+            else if (Array.isArray(parsedText)) {
+              for (const img of parsedText) {
+                if (img && (img.url || img.image_url || img.src)) {
+                  const imageUrl = img.url || img.image_url || img.src;
+                  images.push({
+                    url: imageUrl,
+                    proxy_url: `${CORS_PROXY}${encodeURIComponent(imageUrl)}`,
+                    period: img.valid_time || img.time || img.period || '',
+                    content_type: img.content_type || 'image/gif',
+                    product: img.product || '',
+                    metadata: {
+                      original: item,
+                      parsedText,
+                      source: 'parsed_text_array'
+                    }
+                  });
+                  console.log('✅ [ImageParser] Added image from array:', imageUrl);
+                }
+              }
+            }
+            // Check if parsedText has frame_lists (GFA format)
+            else if (parsedText.frame_lists && Array.isArray(parsedText.frame_lists)) {
+              for (const frame of parsedText.frame_lists) {
+                if (frame.url || frame.image_url) {
+                  const imageUrl = frame.url || frame.image_url;
+                  images.push({
+                    url: imageUrl,
+                    proxy_url: `${CORS_PROXY}${encodeURIComponent(imageUrl)}`,
+                    period: frame.period || frame.time || '',
+                    content_type: 'image/gif',
+                    product: parsedText.product || '',
+                    metadata: {
+                      original: item,
+                      parsedText,
+                      source: 'parsed_text_frame_lists'
+                    }
+                  });
+                  console.log('✅ [ImageParser] Added image from frame_lists:', imageUrl);
+                }
+              }
+            }
+            // Check if parsedText has nested image data
+            else if (parsedText.images && Array.isArray(parsedText.images)) {
+              for (const img of parsedText.images) {
+                if (img && (img.url || img.image_url || img.src)) {
+                  const imageUrl = img.url || img.image_url || img.src;
+                  images.push({
+                    url: imageUrl,
+                    proxy_url: `${CORS_PROXY}${encodeURIComponent(imageUrl)}`,
+                    period: img.valid_time || img.time || img.period || '',
+                    content_type: img.content_type || 'image/gif',
+                    product: img.product || '',
+                    metadata: {
+                      original: item,
+                      parsedText,
+                      source: 'parsed_text_nested_images'
+                    }
+                  });
+                  console.log('✅ [ImageParser] Added image from nested images:', imageUrl);
+                }
+              }
+            }
+            // Try to find URLs in stringified parsedText as last resort
+            else {
+              const stringified = JSON.stringify(parsedText);
+              const urlMatches = stringified.match(/https?:\/\/[^\s"]+\.(gif|png|jpg|jpeg)/gi);
+              if (urlMatches && urlMatches.length > 0) {
+                for (const url of urlMatches) {
+                  images.push({
+                    url,
+                    proxy_url: `${CORS_PROXY}${encodeURIComponent(url)}`,
+                    period: item.valid_time || item.time || '',
+                    content_type: 'image/' + url.split('.').pop(),
+                    metadata: {
+                      original: item,
+                      parsedText,
+                      source: 'parsed_text_url_search'
+                    }
+                  });
+                  console.log('✅ [ImageParser] Added image from URL search:', url);
+                }
+              }
             }
           }
+        }
+        // If no text field, check if the item itself has image data
+        else if (item.url || item.image_url || item.src) {
+          const imageUrl = item.url || item.image_url || item.src;
+          images.push({
+            url: imageUrl,
+            proxy_url: `${CORS_PROXY}${encodeURIComponent(imageUrl)}`,
+            period: item.valid_time || item.time || item.period || '',
+            content_type: item.content_type || 'image/gif',
+            product: item.product || '',
+            metadata: {
+              original: item,
+              source: 'direct_item_url'
+            }
+          });
+          console.log('✅ [ImageParser] Added image from direct item:', imageUrl);
         }
       }
 
@@ -186,7 +306,9 @@ export function parseImageData(data) {
       hasData: !!data?.data,
       hasImages: !!data?.images,
       hasUrl: !!(data?.url || data?.image_url),
-      structure: typeof data === 'object' ? Object.keys(data) : 'primitive'
+      structure: typeof data === 'object' ? Object.keys(data) : 'primitive',
+      dataArrayLength: Array.isArray(data?.data) ? data.data.length : 'not array',
+      firstDataItem: Array.isArray(data?.data) && data.data.length > 0 ? data.data[0] : null
     }
   };
 }

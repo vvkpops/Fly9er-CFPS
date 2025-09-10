@@ -17,18 +17,18 @@ import { useWeatherFetching } from './services/weatherFetchingService.js';
 const Weatheredstrip = () => {
   // Default configuration for a typical user session
   const [config, setConfig] = useState({
-    primarySite: 'CYYT',
-    additionalSites: ['CYUL', 'CYVR', 'CYYZ'],
+    primarySite: '',
+    additionalSites: [],
     requestDelay: 250, // Reduced for faster fetching
   });
 
   // Pre-select essential data types for a streamlined experience
   const [selectedData, setSelectedData] = useState({
     alpha: ['metar', 'taf', 'notam', 'sigmet', 'pirep'],
-    image: ['GFA/CLDWX', 'GFA/TURBC', 'RADAR/COMPOSITE'],
+    image: ['GFA/CLDWX', 'GFA/TURBC', 'RADAR/COMPOSITE', 'SATELLITE/IR'],
   });
 
-  const [isConfigExpanded, setConfigExpanded] = useState(false);
+  const [isConfigExpanded, setConfigExpanded] = useState(true);
 
   // Custom hooks for state management
   const weatherData = useWeatherData();
@@ -44,18 +44,23 @@ const Weatheredstrip = () => {
 
   // Auto-fetch weather data on initial application load
   useEffect(() => {
-    if (config.primarySite) {
-      weatherFetching.fetchWeatherData();
-    }
-  }, []); // This effect runs only once on mount
+    // We won't auto-fetch on load anymore since sites are empty by default.
+    // The user can initiate the fetch.
+  }, []);
 
   // Handlers for user actions
   const handleFetch = () => {
-    weatherFetching.fetchWeatherData();
+    if (config.primarySite || config.additionalSites.length > 0) {
+      weatherFetching.fetchWeatherData();
+    } else {
+      // Maybe show a gentle alert to the user to enter a site
+      console.warn("No sites configured to fetch data.");
+      // In a real app, you might set a status message here.
+    }
   };
 
   const handleRefresh = () => {
-    weatherFetching.fetchWeatherData();
+    handleFetch();
   };
 
   return (

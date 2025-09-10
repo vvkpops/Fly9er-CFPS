@@ -1,7 +1,8 @@
 // src/components/results/WeatherImageryViewer.jsx
 
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, AlertTriangle, Clock, Cloud, Zap } from 'lucide-react';
+import { ChevronLeft, ChevronRight, AlertTriangle, Clock, Cloud, Zap, ImageOff } from 'lucide-react';
+import { parseImageData } from '../../utils/parsers/imageParser.js';
 
 const WeatherImageryViewer = ({ imageData, getDataStatus }) => {
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -9,9 +10,9 @@ const WeatherImageryViewer = ({ imageData, getDataStatus }) => {
   if (!imageData || Object.keys(imageData).length === 0) {
     return (
       <div className="text-center py-12">
-        <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+        <ImageOff className="w-12 h-12 text-gray-400 mx-auto mb-4" />
         <h3 className="text-lg font-semibold text-gray-700 mb-2">No Imagery Data</h3>
-        <p className="text-gray-500">No weather imagery was found for this station.</p>
+        <p className="text-gray-500">No weather imagery was requested or found for this station.</p>
       </div>
     );
   }
@@ -30,11 +31,23 @@ const WeatherImageryViewer = ({ imageData, getDataStatus }) => {
   useEffect(() => {
     if (availableCategories.length > 0 && !selectedCategory) {
       setSelectedCategory(availableCategories[0][0]);
+    } else if (availableCategories.length === 0 && selectedCategory) {
+      setSelectedCategory('');
     }
   }, [availableCategories, selectedCategory]);
 
   const categoryIcons = { satellite: '🛰️', radar: '📡', gfa: '🗺️', sigwx: '⚡' };
   const categoryNames = { satellite: 'Satellite', radar: 'Radar', gfa: 'GFA Charts', sigwx: 'SIG WX' };
+
+  if(availableCategories.length === 0) {
+     return (
+      <div className="text-center py-12">
+        <ImageOff className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+        <h3 className="text-lg font-semibold text-gray-700 mb-2">No Available Imagery</h3>
+        <p className="text-gray-500">Could not find any images for the selected data types.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -60,9 +73,11 @@ const WeatherImageryViewer = ({ imageData, getDataStatus }) => {
       </nav>
 
       {/* Category Content */}
-      <div className="space-y-4">
-        {Object.entries(categories[selectedCategory] || {}).map(([imageType, data]) => {
-          const { Icon, text, color } = getDataStatus(data);
+      <div className="space-y-4 pt-4">
+        {Object.entries(categories[selectedCategory] || {}).map(([imageType, rawData]) => {
+          const { Icon, text, color } = getDataStatus(rawData);
+          const parsed = parseImageData(rawData);
+
           return (
             <div key={imageType} className="border border-gray-300 rounded-lg overflow-hidden bg-white">
               <header className="bg-gradient-to-r from-purple-50 to-blue-50 px-4 py-3 border-b border-gray-200">
@@ -75,10 +90,12 @@ const WeatherImageryViewer = ({ imageData, getDataStatus }) => {
                 </div>
               </header>
               <div className="p-4">
-                {data?.error ? (
-                  <div className="bg-red-50 border border-red-200 p-4 rounded text-red-700">Error: {data.error}</div>
-                ) : data?.images && data.images.length > 0 ? (
-                  <ImageViewer images={data.images} imageType={imageType} />
+                {parsed.error && !parsed.images?.length ? (
+                  <div className="bg-red-50 border border-red-200 p-4 rounded text-red-700">
+                    Error parsing image data: {parsed.error}
+                  </div>
+                ) : parsed.images && parsed.images.length > 0 ? (
+                  <ImageViewer images={parsed.images} imageType={imageType} />
                 ) : (
                   <div className="text-center py-8 text-gray-500">No images available for this type.</div>
                 )}
@@ -110,7 +127,7 @@ const ImageViewer = ({ images, imageType }) => {
   if (!displayImages || displayImages.length === 0) {
     return (
       <div className="text-center py-8 text-gray-500">
-        {isGFA ? `No images available for GFA ${gfaMode} view.` : `No images available.`}
+        {isGFA ? `No images available for GFA ${gfaMode} view.` : `No valid images found.`}
       </div>
     );
   }
@@ -135,7 +152,7 @@ const ImageViewer = ({ images, imageType }) => {
           <button
             onClick={() => setGfaMode('icing')}
             disabled={gfaIcingImages.length === 0}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors disabled.opacity-50 ${
               gfaMode === 'icing' ? 'bg-purple-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
             }`}
           >
@@ -147,12 +164,19 @@ const ImageViewer = ({ images, imageType }) => {
       <div className="flex flex-col items-center space-y-3">
         <div className="relative w-full max-w-2xl">
           <div className="aspect-w-4 aspect-h-3 bg-gray-900 rounded-lg border-4 border-gray-700 flex items-center justify-center overflow-hidden">
-            <img
-              key={currentImage.proxy_url || currentImage.url}
-              src={currentImage.proxy_url || currentImage.url}
-              alt={`${imageType} - ${currentImage.period || currentIndex + 1}`}
-              className="max-w-full max-h-full object-contain"
-            />
+            {currentImage?.proxy_url || currentImage?.url ? (
+               <img
+                key={currentImage.proxy_url || currentImage.url}
+                src={currentImage.proxy_url || currentImage.url}
+                alt={`${imageType} - ${currentImage.period || currentIndex + 1}`}
+                className="max-w-full max-h-full object-contain"
+                onError={(e) => { e.target.style.display = 'none'; /* Hide broken images */ }}
+              />
+            ) : (
+              <div className="p-4 text-center text-gray-400">
+                <p>Image URL is missing.</p>
+              </div>
+            )}
           </div>
           <div className="absolute top-3 left-3 bg-black bg-opacity-70 text-white px-3 py-1 rounded-lg font-mono text-sm flex items-center gap-2">
             <Clock className="w-4 h-4" />

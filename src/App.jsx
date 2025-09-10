@@ -10,7 +10,6 @@ import Footer from './components/common/Footer.jsx';
 // Hooks
 import { useWeatherData } from './hooks/useWeatherData.js';
 import { useScrapingState } from './hooks/useScrapingState.js';
-import { useFetchProgress } from './hooks/useFetchProgress.js';
 
 // Services
 import { useWeatherFetching } from './services/weatherFetchingService.js';
@@ -34,15 +33,13 @@ const Weatheredstrip = () => {
   // Custom hooks for state management
   const weatherData = useWeatherData();
   const scrapingState = useScrapingState();
-  const fetchProgress = useFetchProgress();
 
   // Weather fetching service
   const weatherFetching = useWeatherFetching(
     config, 
     selectedData, 
     weatherData, 
-    scrapingState, 
-    fetchProgress
+    scrapingState
   );
 
   // Auto-fetch weather data on initial application load

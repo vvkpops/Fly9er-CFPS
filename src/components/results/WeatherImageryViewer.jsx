@@ -1,7 +1,7 @@
 // src/components/results/WeatherImageryViewer.jsx
 
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, AlertTriangle, Clock, Cloud, Zap, ImageOff, RefreshCw, Eye, ExternalLink, Globe } from 'lucide-react';
+import { ChevronLeft, ChevronRight, AlertTriangle, Clock, Cloud, Zap, ImageOff, RefreshCw, Eye, ExternalLink, Globe, Info } from 'lucide-react';
 import { parseImageData, enhanceImageData } from '../../utils/parsers/imageParser.js';
 
 const WeatherImageryViewer = ({ imageData, getDataStatus }) => {
@@ -32,8 +32,6 @@ const WeatherImageryViewer = ({ imageData, getDataStatus }) => {
   useEffect(() => {
     if (availableCategories.length > 0 && !selectedCategory) {
       setSelectedCategory(availableCategories[0][0]);
-    } else if (availableCategories.length === 0 && selectedCategory) {
-      setSelectedCategory('');
     }
   }, [availableCategories, selectedCategory]);
 
@@ -46,18 +44,6 @@ const WeatherImageryViewer = ({ imageData, getDataStatus }) => {
         <ImageOff className="w-12 h-12 text-gray-400 mx-auto mb-4" />
         <h3 className="text-lg font-semibold text-gray-700 mb-2">No Available Imagery</h3>
         <p className="text-gray-500">Could not find any images for the selected data types.</p>
-        <button
-          onClick={() => setDebugMode(!debugMode)}
-          className="mt-4 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors flex items-center gap-2 mx-auto"
-        >
-          <Eye className="w-4 h-4" />
-          {debugMode ? 'Hide' : 'Show'} Debug Info
-        </button>
-        {debugMode && (
-          <div className="mt-4 p-4 bg-gray-100 rounded-lg text-left text-sm">
-            <pre>{JSON.stringify(imageData, null, 2)}</pre>
-          </div>
-        )}
       </div>
     );
   }
@@ -121,16 +107,14 @@ const WeatherImageryViewer = ({ imageData, getDataStatus }) => {
                       <div className="text-sm mt-1">{parsed.error}</div>
                     </div>
                     
-                    {debugMode && parsed.debug && (
+                    {debugMode && (
                       <div className="bg-gray-50 border border-gray-200 p-4 rounded">
                         <div className="font-semibold text-gray-700 mb-2">Debug Information:</div>
                         <div className="text-xs space-y-1">
-                          <div>Data Type: {parsed.debug.dataType}</div>
-                          <div>Keys: {parsed.debug.keys.join(', ')}</div>
-                          <div>Has Data Array: {parsed.debug.hasData ? 'Yes' : 'No'}</div>
-                          <div>Data Array Length: {parsed.debug.dataArrayLength}</div>
-                          <div>Has Images Array: {parsed.debug.hasImages ? 'Yes' : 'No'}</div>
-                          <div>Has URL: {parsed.debug.hasUrl ? 'Yes' : 'No'}</div>
+                          <div>Data Type: {parsed.debug?.dataType}</div>
+                          <div>Keys: {parsed.debug?.keys?.join(', ')}</div>
+                          <div>Has Data Array: {parsed.debug?.hasData ? 'Yes' : 'No'}</div>
+                          <div>Data Array Length: {parsed.debug?.dataArrayLength}</div>
                         </div>
                         <details className="mt-2">
                           <summary className="cursor-pointer text-sm font-medium text-gray-600">Raw Data</summary>
@@ -149,15 +133,8 @@ const WeatherImageryViewer = ({ imageData, getDataStatus }) => {
                   />
                 ) : (
                   <div className="text-center py-8 text-gray-500">
+                    <Info className="w-8 h-8 mx-auto mb-2 text-gray-400" />
                     <div>No images available for this type.</div>
-                    {debugMode && (
-                      <div className="mt-4 p-3 bg-gray-50 rounded text-xs text-left">
-                        <div className="font-semibold mb-2">Raw Data Preview:</div>
-                        <pre className="overflow-auto max-h-32">
-                          {JSON.stringify(rawData, null, 2)}
-                        </pre>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
@@ -174,21 +151,16 @@ const ImageViewer = ({ images, imageType, debugMode = false }) => {
   const [gfaMode, setGfaMode] = useState('clouds');
   const [imageErrors, setImageErrors] = useState({});
   const [imageLoading, setImageLoading] = useState({});
-  const [retryCount, setRetryCount] = useState({});
+  const [loadAttempts, setLoadAttempts] = useState({});
 
   const isGFA = imageType.includes('GFA');
   
-  // Separate GFA images into clouds/weather and icing/turbulence
   const gfaCloudImages = isGFA ? images.filter(img => 
-    img.product === 'cldwx' || 
-    img.content_type?.includes('cldwx') ||
-    imageType.includes('CLDWX')
+    img.product === 'cldwx' || imageType.includes('CLDWX')
   ) : [];
   
   const gfaIcingImages = isGFA ? images.filter(img => 
-    img.product === 'turbc' || 
-    img.content_type?.includes('turbc') ||
-    imageType.includes('TURBC')
+    img.product === 'turbc' || imageType.includes('TURBC')
   ) : [];
 
   const displayImages = isGFA ? (gfaMode === 'clouds' ? gfaCloudImages : gfaIcingImages) : images;
@@ -197,26 +169,15 @@ const ImageViewer = ({ images, imageType, debugMode = false }) => {
     setCurrentIndex(0);
     setImageErrors({});
     setImageLoading({});
-    setRetryCount({});
+    setLoadAttempts({});
   }, [gfaMode, images]);
 
   if (!displayImages || displayImages.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-500 space-y-4">
+      <div className="text-center py-8 text-gray-500">
         <div>
           {isGFA ? `No images available for GFA ${gfaMode} view.` : `No valid images found.`}
         </div>
-        {debugMode && (
-          <div className="text-xs bg-gray-50 p-3 rounded">
-            <div>Total images: {images.length}</div>
-            {isGFA && (
-              <>
-                <div>Cloud images: {gfaCloudImages.length}</div>
-                <div>Icing images: {gfaIcingImages.length}</div>
-              </>
-            )}
-          </div>
-        )}
       </div>
     );
   }
@@ -226,45 +187,39 @@ const ImageViewer = ({ images, imageType, debugMode = false }) => {
   const prevImage = () => setCurrentIndex(prev => (prev - 1 + displayImages.length) % displayImages.length);
 
   const handleImageLoad = (imageKey) => {
+    console.log('✅ [ImageViewer] Image loaded successfully:', imageKey);
     setImageLoading(prev => ({ ...prev, [imageKey]: false }));
     setImageErrors(prev => ({ ...prev, [imageKey]: false }));
-    setRetryCount(prev => ({ ...prev, [imageKey]: 0 }));
   };
 
   const handleImageError = (imageKey, imageUrl) => {
-    console.error('❌ [ImageViewer] Failed to load image:', imageUrl);
+    console.error('❌ [ImageViewer] Image failed to load:', imageUrl);
     setImageLoading(prev => ({ ...prev, [imageKey]: false }));
     setImageErrors(prev => ({ ...prev, [imageKey]: true }));
+    
+    // Track failed attempts
+    setLoadAttempts(prev => ({ 
+      ...prev, 
+      [imageKey]: (prev[imageKey] || 0) + 1 
+    }));
   };
 
   const handleImageLoadStart = (imageKey) => {
+    console.log('🔄 [ImageViewer] Starting to load image:', imageKey);
     setImageLoading(prev => ({ ...prev, [imageKey]: true }));
   };
 
-  const retryImage = (image, imageKey) => {
-    const currentRetries = retryCount[imageKey] || 0;
-    if (currentRetries < 2) {
-      setRetryCount(prev => ({ ...prev, [imageKey]: currentRetries + 1 }));
-      setImageErrors(prev => ({ ...prev, [imageKey]: false }));
-      setImageLoading(prev => ({ ...prev, [imageKey]: true }));
-      
-      // Force image reload by adding a timestamp
-      const urlWithCache = `${image.proxy_url}&retry=${currentRetries + 1}&t=${Date.now()}`;
-      
-      // Update the image src to force reload
-      const imageElement = document.querySelector(`img[data-image-key="${imageKey}"]`);
-      if (imageElement) {
-        imageElement.src = urlWithCache;
-      }
+  const retryImage = (imageKey) => {
+    console.log('🔄 [ImageViewer] Retrying image:', imageKey);
+    setImageErrors(prev => ({ ...prev, [imageKey]: false }));
+    setImageLoading(prev => ({ ...prev, [imageKey]: true }));
+    
+    // Force reload by changing the timestamp
+    const img = document.querySelector(`img[data-image-key="${imageKey}"]`);
+    if (img) {
+      const originalSrc = img.src.split('&_retry=')[0];
+      img.src = `${originalSrc}&_retry=${Date.now()}`;
     }
-  };
-
-  const getCurrentImageUrl = (image, imageKey) => {
-    const currentRetries = retryCount[imageKey] || 0;
-    if (currentRetries > 0) {
-      return `${image.proxy_url}&retry=${currentRetries}&t=${Date.now()}`;
-    }
-    return image.proxy_url || image.url;
   };
 
   return (
@@ -312,21 +267,16 @@ const ImageViewer = ({ images, imageType, debugMode = false }) => {
                   <div className="text-center text-gray-400 p-6">
                     <AlertTriangle className="w-12 h-12 mx-auto mb-4" />
                     <p className="mb-2">Failed to load image</p>
-                    <p className="text-sm text-gray-500 mb-4 break-all">
-                      Proxy: {getCurrentImageUrl(currentImage, currentIndex)}
-                    </p>
                     <div className="space-y-2">
-                      {(retryCount[currentIndex] || 0) < 2 && (
-                        <button
-                          onClick={() => retryImage(currentImage, currentIndex)}
-                          className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
-                        >
-                          Retry Loading ({(retryCount[currentIndex] || 0) + 1}/3)
-                        </button>
-                      )}
+                      <button
+                        onClick={() => retryImage(currentIndex)}
+                        className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
+                      >
+                        Retry Loading (Attempt {(loadAttempts[currentIndex] || 0) + 1})
+                      </button>
                       <div className="space-x-2">
                         <a
-                          href={currentImage.direct_url || currentImage.url}
+                          href={currentImage.url}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors text-sm"
@@ -348,13 +298,13 @@ const ImageViewer = ({ images, imageType, debugMode = false }) => {
                   </div>
                 ) : (
                   <img
-                    key={`${currentIndex}-${retryCount[currentIndex] || 0}`}
+                    key={`${currentIndex}-${loadAttempts[currentIndex] || 0}`}
                     data-image-key={currentIndex}
-                    src={getCurrentImageUrl(currentImage, currentIndex)}
+                    src={currentImage.proxy_url}
                     alt={`${imageType} - ${currentImage.period || currentIndex + 1}`}
                     className="max-w-full max-h-full object-contain"
                     onLoad={() => handleImageLoad(currentIndex)}
-                    onError={() => handleImageError(currentIndex, getCurrentImageUrl(currentImage, currentIndex))}
+                    onError={() => handleImageError(currentIndex, currentImage.proxy_url)}
                     onLoadStart={() => handleImageLoadStart(currentIndex)}
                     style={{ display: imageErrors[currentIndex] ? 'none' : 'block' }}
                   />
@@ -364,11 +314,6 @@ const ImageViewer = ({ images, imageType, debugMode = false }) => {
               <div className="p-4 text-center text-gray-400">
                 <AlertTriangle className="w-8 h-8 mx-auto mb-2" />
                 <p>Image URL is missing</p>
-                {debugMode && (
-                  <div className="mt-2 text-xs bg-gray-800 p-2 rounded">
-                    <pre>{JSON.stringify(currentImage, null, 2)}</pre>
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -384,27 +329,18 @@ const ImageViewer = ({ images, imageType, debugMode = false }) => {
             </span>
           </div>
 
-          {/* Retry Counter Overlay */}
-          {(retryCount[currentIndex] || 0) > 0 && (
-            <div className="absolute top-3 right-3 bg-yellow-500 bg-opacity-90 text-black px-2 py-1 rounded text-xs font-bold">
-              Retry {retryCount[currentIndex]}/3
-            </div>
-          )}
-
           {/* Navigation Arrows */}
           {displayImages.length > 1 && (
             <>
               <button 
                 onClick={prevImage} 
                 className="absolute left-3 top-1/2 -translate-y-1/2 bg-black bg-opacity-60 text-white p-2 rounded-full hover:bg-opacity-80 transition-opacity" 
-                aria-label="Previous image"
               >
                 <ChevronLeft className="w-6 h-6" />
               </button>
               <button 
                 onClick={nextImage} 
                 className="absolute right-3 top-1/2 -translate-y-1/2 bg-black bg-opacity-60 text-white p-2 rounded-full hover:bg-opacity-80 transition-opacity" 
-                aria-label="Next image"
               >
                 <ChevronRight className="w-6 h-6" />
               </button>
@@ -421,7 +357,6 @@ const ImageViewer = ({ images, imageType, debugMode = false }) => {
               className={`w-2.5 h-2.5 rounded-full transition-colors ${
                 index === currentIndex ? 'bg-blue-600' : 'bg-gray-300 hover:bg-gray-400'
               }`} 
-              aria-label={`Go to image ${index + 1}`} 
             />
           ))}
         </div>
@@ -435,41 +370,17 @@ const ImageViewer = ({ images, imageType, debugMode = false }) => {
                 <div className="font-medium">URLs:</div>
                 <div className="break-all">Original: {currentImage.url}</div>
                 <div className="break-all">Proxy: {currentImage.proxy_url}</div>
-                <div className="break-all">Current: {getCurrentImageUrl(currentImage, currentIndex)}</div>
-                <div className="break-all">Direct: {currentImage.direct_url}</div>
+                <div>Image ID: {currentImage.metadata?.image_id}</div>
               </div>
               <div>
                 <div className="font-medium">Status:</div>
                 <div>Loading: {imageLoading[currentIndex] ? 'Yes' : 'No'}</div>
                 <div>Error: {imageErrors[currentIndex] ? 'Yes' : 'No'}</div>
-                <div>Retries: {retryCount[currentIndex] || 0}</div>
-                <div>Period: {currentImage.period || 'N/A'}</div>
-                <div>Type: {currentImage.content_type || 'N/A'}</div>
+                <div>Attempts: {loadAttempts[currentIndex] || 0}</div>
                 <div>Product: {currentImage.product || 'N/A'}</div>
+                <div>Geography: {currentImage.geography || 'N/A'}</div>
               </div>
             </div>
-            {currentImage.frame_info && (
-              <div className="mt-2">
-                <div className="font-medium text-xs">Frame Info:</div>
-                <div className="text-xs space-y-1">
-                  <div>Start: {currentImage.frame_info.start_validity}</div>
-                  <div>End: {currentImage.frame_info.end_validity}</div>
-                  <div>Created: {currentImage.frame_info.created}</div>
-                </div>
-              </div>
-            )}
-            {currentImage.fallback_urls && (
-              <div className="mt-2">
-                <div className="font-medium text-xs">Available URLs:</div>
-                <div className="text-xs space-y-1 max-h-20 overflow-auto">
-                  {currentImage.fallback_urls.map((url, i) => (
-                    <div key={i} className="break-all">
-                      {i + 1}: {url}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>

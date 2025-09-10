@@ -1,7 +1,7 @@
 // src/components/results/WeatherImageryViewer.jsx
 
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, AlertTriangle, Clock, Cloud, Zap, ImageOff, RefreshCw, Eye } from 'lucide-react';
+import { ChevronLeft, ChevronRight, AlertTriangle, Clock, Cloud, Zap, ImageOff, RefreshCw, Eye, ExternalLink } from 'lucide-react';
 import { parseImageData, enhanceImageData } from '../../utils/parsers/imageParser.js';
 
 const WeatherImageryViewer = ({ imageData, getDataStatus }) => {
@@ -128,6 +128,7 @@ const WeatherImageryViewer = ({ imageData, getDataStatus }) => {
                           <div>Data Type: {parsed.debug.dataType}</div>
                           <div>Keys: {parsed.debug.keys.join(', ')}</div>
                           <div>Has Data Array: {parsed.debug.hasData ? 'Yes' : 'No'}</div>
+                          <div>Data Array Length: {parsed.debug.dataArrayLength}</div>
                           <div>Has Images Array: {parsed.debug.hasImages ? 'Yes' : 'No'}</div>
                           <div>Has URL: {parsed.debug.hasUrl ? 'Yes' : 'No'}</div>
                         </div>
@@ -173,6 +174,7 @@ const ImageViewer = ({ images, imageType, debugMode = false }) => {
   const [gfaMode, setGfaMode] = useState('clouds');
   const [imageErrors, setImageErrors] = useState({});
   const [imageLoading, setImageLoading] = useState({});
+  const [fallbackIndex, setFallbackIndex] = useState({});
 
   const isGFA = imageType.includes('GFA');
   
@@ -195,6 +197,7 @@ const ImageViewer = ({ images, imageType, debugMode = false }) => {
     setCurrentIndex(0);
     setImageErrors({});
     setImageLoading({});
+    setFallbackIndex({});
   }, [gfaMode, images]);
 
   if (!displayImages || displayImages.length === 0) {
@@ -237,11 +240,25 @@ const ImageViewer = ({ images, imageType, debugMode = false }) => {
     setImageLoading(prev => ({ ...prev, [imageKey]: true }));
   };
 
-  const tryNextFallback = (image, currentIndex = 0) => {
-    if (!image.fallback_urls || currentIndex >= image.fallback_urls.length) {
-      return null;
+  const tryNextFallback = (image, imageKey) => {
+    const currentFallbackIndex = fallbackIndex[imageKey] || 0;
+    const nextIndex = currentFallbackIndex + 1;
+    
+    if (image.fallback_urls && nextIndex < image.fallback_urls.length) {
+      setFallbackIndex(prev => ({ ...prev, [imageKey]: nextIndex }));
+      setImageErrors(prev => ({ ...prev, [imageKey]: false }));
+      setImageLoading(prev => ({ ...prev, [imageKey]: true }));
+      return image.fallback_urls[nextIndex];
     }
-    return image.fallback_urls[currentIndex];
+    return null;
+  };
+
+  const getCurrentImageUrl = (image, imageKey) => {
+    const currentFallbackIndex = fallbackIndex[imageKey] || 0;
+    if (image.fallback_urls && currentFallbackIndex < image.fallback_urls.length) {
+      return image.fallback_urls[currentFallbackIndex];
+    }
+    return image.proxy_url || image.url;
   };
 
   return (
@@ -289,33 +306,43 @@ const ImageViewer = ({ images, imageType, debugMode = false }) => {
                   <div className="text-center text-gray-400 p-6">
                     <AlertTriangle className="w-12 h-12 mx-auto mb-4" />
                     <p className="mb-2">Failed to load image</p>
-                    <p className="text-sm text-gray-500 mb-4">
-                      URL: {currentImage.proxy_url || currentImage.url}
+                    <p className="text-sm text-gray-500 mb-4 break-all">
+                      URL: {getCurrentImageUrl(currentImage, currentIndex)}
                     </p>
-                    {currentImage.fallback_urls && currentImage.fallback_urls.length > 1 && (
-                      <button
-                        onClick={() => {
-                          // Try next fallback URL
-                          const nextUrl = tryNextFallback(currentImage, 1);
-                          if (nextUrl) {
-                            setImageErrors(prev => ({ ...prev, [currentIndex]: false }));
-                            // Force reload with next URL
-                          }
-                        }}
-                        className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
+                    <div className="space-y-2">
+                      {currentImage.fallback_urls && currentImage.fallback_urls.length > 1 && (
+                        <button
+                          onClick={() => {
+                            const nextUrl = tryNextFallback(currentImage, currentIndex);
+                            if (!nextUrl) {
+                              setImageErrors(prev => ({ ...prev, [currentIndex]: false }));
+                              setFallbackIndex(prev => ({ ...prev, [currentIndex]: 0 }));
+                            }
+                          }}
+                          className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
+                        >
+                          Try Alternative Source
+                        </button>
+                      )}
+                      <a
+                        href={currentImage.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors text-sm"
                       >
-                        Try Alternative Source
-                      </button>
-                    )}
+                        <ExternalLink className="w-3 h-3" />
+                        Open Original
+                      </a>
+                    </div>
                   </div>
                 ) : (
                   <img
-                    key={currentImage.proxy_url || currentImage.url}
-                    src={currentImage.proxy_url || currentImage.url}
+                    key={`${currentIndex}-${fallbackIndex[currentIndex] || 0}`}
+                    src={getCurrentImageUrl(currentImage, currentIndex)}
                     alt={`${imageType} - ${currentImage.period || currentIndex + 1}`}
                     className="max-w-full max-h-full object-contain"
                     onLoad={() => handleImageLoad(currentIndex)}
-                    onError={() => handleImageError(currentIndex, currentImage.proxy_url || currentImage.url)}
+                    onError={() => handleImageError(currentIndex, getCurrentImageUrl(currentImage, currentIndex))}
                     onLoadStart={() => handleImageLoadStart(currentIndex)}
                     style={{ display: imageErrors[currentIndex] ? 'none' : 'block' }}
                   />
@@ -337,7 +364,12 @@ const ImageViewer = ({ images, imageType, debugMode = false }) => {
           {/* Image Info Overlay */}
           <div className="absolute top-3 left-3 bg-black bg-opacity-70 text-white px-3 py-1 rounded-lg font-mono text-sm flex items-center gap-2">
             <Clock className="w-4 h-4" />
-            <span>{currentImage.period ? `T+${currentImage.period}H` : `IMG ${currentIndex + 1}`}</span>
+            <span>
+              {currentImage.frame_info?.start_validity || currentImage.period ? 
+                `${currentImage.frame_info?.start_validity || `T+${currentImage.period}H`}` : 
+                `IMG ${currentIndex + 1}`
+              }
+            </span>
           </div>
 
           {/* Navigation Arrows */}
@@ -384,20 +416,34 @@ const ImageViewer = ({ images, imageType, debugMode = false }) => {
                 <div className="font-medium">URLs:</div>
                 <div className="break-all">Original: {currentImage.url}</div>
                 <div className="break-all">Proxy: {currentImage.proxy_url}</div>
+                <div className="break-all">Current: {getCurrentImageUrl(currentImage, currentIndex)}</div>
               </div>
               <div>
                 <div className="font-medium">Metadata:</div>
                 <div>Period: {currentImage.period || 'N/A'}</div>
                 <div>Type: {currentImage.content_type || 'N/A'}</div>
                 <div>Product: {currentImage.product || 'N/A'}</div>
+                <div>Fallback Index: {fallbackIndex[currentIndex] || 0}</div>
               </div>
             </div>
+            {currentImage.frame_info && (
+              <div className="mt-2">
+                <div className="font-medium text-xs">Frame Info:</div>
+                <div className="text-xs space-y-1">
+                  <div>Start: {currentImage.frame_info.start_validity}</div>
+                  <div>End: {currentImage.frame_info.end_validity}</div>
+                  <div>Created: {currentImage.frame_info.created}</div>
+                </div>
+              </div>
+            )}
             {currentImage.fallback_urls && (
               <div className="mt-2">
                 <div className="font-medium text-xs">Fallback URLs:</div>
                 <div className="text-xs space-y-1 max-h-20 overflow-auto">
                   {currentImage.fallback_urls.map((url, i) => (
-                    <div key={i} className="break-all">{i + 1}: {url}</div>
+                    <div key={i} className={`break-all ${i === (fallbackIndex[currentIndex] || 0) ? 'font-bold text-blue-600' : ''}`}>
+                      {i + 1}: {url}
+                    </div>
                   ))}
                 </div>
               </div>
